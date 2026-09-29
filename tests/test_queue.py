@@ -75,9 +75,14 @@ def test_skip_locked_does_not_wait_for_locked_rows(queue: Queue, db_url: str) ->
     # Another transaction holds a row lock on the head of the queue.
     with psycopg.connect(db_url) as other, ThreadPoolExecutor(1) as pool:
         other.execute("SELECT id FROM jobs WHERE id = %s FOR UPDATE", (first.id,))
-        claimed = pool.submit(queue.claim, "w").result(timeout=5)
+        future = pool.submit(queue.claim, "w")
+        try:
+            claimed = future.result(timeout=2)
+        finally:
+            # Release the lock before the executor waits for its thread, so a
+            # regression (a claim that blocks) fails the test instead of hanging it.
+            other.rollback()
         assert [j.id for j in claimed] == [second.id]
-        other.rollback()
 
 
 def test_naive_claim_blocks_behind_locked_row(queue: Queue, db_url: str) -> None:
