@@ -32,11 +32,14 @@ from .localdb import database_url
 TASK = "crash-test"
 
 
-def _worker_main(url: str, worker_id: str, lease: float, work: tuple[float, float]) -> None:
+def worker_main(url: str, worker_id: str, lease: float, work: tuple[float, float]) -> None:
     logging.basicConfig(level=logging.ERROR)
     recorder = psycopg.connect(url, autocommit=True)
 
     def handler(job: Job) -> dict[str, Any]:
+        nonlocal recorder
+        if recorder.broken or recorder.closed:  # e.g. after a database restart
+            recorder = psycopg.connect(url, autocommit=True)
         recorder.execute(
             "INSERT INTO crash_deliveries (job_id, worker_id, attempt) VALUES (%s, %s, %s)",
             (job.id, worker_id, job.attempts),
@@ -55,7 +58,7 @@ def _worker_main(url: str, worker_id: str, lease: float, work: tuple[float, floa
         ).run()
 
 
-def _reset(url: str) -> None:
+def reset(url: str) -> None:
     with psycopg.connect(url, autocommit=True) as conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS crash_deliveries ("
@@ -78,7 +81,7 @@ def run_crash_test(
     timeout: float = 120.0,
 ) -> dict[str, Any]:
     migrate(url)
-    _reset(url)
+    reset(url)
     rng = random.Random(seed)
     with Queue(url) as q:
         for i in range(jobs):
@@ -93,7 +96,7 @@ def run_crash_test(
         nonlocal next_id
         wid = f"crash-{next_id}"
         next_id += 1
-        p = ctx.Process(target=_worker_main, args=(url, wid, lease, work), daemon=True)
+        p = ctx.Process(target=worker_main, args=(url, wid, lease, work), daemon=True)
         p.start()
         procs[wid] = p
 
@@ -119,30 +122,12 @@ def run_crash_test(
         procs.pop(victim).kill()  # SIGKILL on Linux, TerminateProcess on Windows
         spawn()
 
-    deadline = time.monotonic() + timeout
-    while True:
-        open_jobs = monitor.execute(
-            "SELECT count(*) FROM jobs WHERE state IN ('queued', 'running')"
-        ).fetchone()[0]
-        if open_jobs == 0 or time.monotonic() > deadline:
-            break
-        time.sleep(0.1)
+    wait_for_terminal(monitor, timeout)
     elapsed = time.monotonic() - started
     for p in procs.values():
         p.kill()
         p.join()
-
-    states = dict(monitor.execute("SELECT state, count(*) FROM jobs GROUP BY state").fetchall())
-    deliveries, distinct, max_per_job = monitor.execute(
-        "SELECT count(*), count(DISTINCT job_id), coalesce(max(n), 0)"
-        " FROM crash_deliveries JOIN (SELECT job_id, count(*) AS n FROM crash_deliveries"
-        " GROUP BY job_id) per_job USING (job_id)"
-    ).fetchone()
-    never_delivered = monitor.execute(
-        "SELECT count(*) FROM jobs j WHERE NOT EXISTS"
-        " (SELECT 1 FROM crash_deliveries d WHERE d.job_id = j.id)"
-    ).fetchone()[0]
-    expired_leases = monitor.execute("SELECT coalesce(sum(errors), 0) FROM jobs").fetchone()[0]
+    summary = summarize(monitor)
     monitor.close()
 
     return {
@@ -154,6 +139,36 @@ def run_crash_test(
         "work_seconds": list(work),
         "seed": seed,
         "elapsed_seconds": round(elapsed, 2),
+        **summary,
+    }
+
+
+def wait_for_terminal(conn: psycopg.Connection, timeout: float) -> None:
+    """Poll until no job is queued or running (or the timeout passes)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        open_jobs = conn.execute(
+            "SELECT count(*) FROM jobs WHERE state IN ('queued', 'running')"
+        ).fetchone()[0]
+        if open_jobs == 0:
+            return
+        time.sleep(0.1)
+
+
+def summarize(conn: psycopg.Connection) -> dict[str, Any]:
+    """Final job states plus delivery counts from the crash_deliveries table."""
+    states = dict(conn.execute("SELECT state, count(*) FROM jobs GROUP BY state").fetchall())
+    deliveries, distinct, max_per_job = conn.execute(
+        "SELECT count(*), count(DISTINCT job_id), coalesce(max(n), 0)"
+        " FROM crash_deliveries JOIN (SELECT job_id, count(*) AS n FROM crash_deliveries"
+        " GROUP BY job_id) per_job USING (job_id)"
+    ).fetchone()
+    never_delivered = conn.execute(
+        "SELECT count(*) FROM jobs j WHERE NOT EXISTS"
+        " (SELECT 1 FROM crash_deliveries d WHERE d.job_id = j.id)"
+    ).fetchone()[0]
+    failed_attempts = conn.execute("SELECT coalesce(sum(errors), 0) FROM jobs").fetchone()[0]
+    return {
         "final_states": states,
         "jobs_in_table": sum(states.values()),
         "non_terminal_jobs": states.get("queued", 0) + states.get("running", 0),
@@ -162,7 +177,9 @@ def run_crash_test(
         "distinct_jobs_delivered": distinct,
         "duplicate_deliveries": deliveries - distinct,
         "max_deliveries_of_one_job": max_per_job,
-        "expired_leases_reaped": int(expired_leases),
+        # Expired leases plus handler errors (the latter only if the database
+        # went away while a handler was recording its delivery).
+        "failed_attempts": int(failed_attempts),
     }
 
 

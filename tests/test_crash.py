@@ -14,4 +14,4 @@ def test_killed_workers_lose_no_jobs(db_url: str) -> None:
     assert result["never_delivered"] == 0
     # At-least-once: duplicates are allowed, but each one must correspond to a
     # lease that expired (a killed worker's job being handed out again).
-    assert result["duplicate_deliveries"] <= result["expired_leases_reaped"]
+    assert result["duplicate_deliveries"] <= result["failed_attempts"]
