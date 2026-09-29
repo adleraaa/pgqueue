@@ -51,7 +51,13 @@ def plot(data: dict, out: Path) -> None:
             color=INK_2,
             fontsize=9,
         )
-    _style(ax1, "Throughput (no-op jobs)", "jobs / second")
+    runs = data["config"]["repeats"]
+    jobs = data["config"]["jobs"]
+    _style(
+        ax1,
+        f"Throughput, no-op jobs\nmedian of {runs} runs, {jobs} jobs each",
+        "jobs / second",
+    )
     ax1.set_ylim(bottom=0)
     ax1.legend(frameon=False, labelcolor=INK_2, fontsize=9)
 
@@ -72,8 +78,8 @@ def plot(data: dict, out: Path) -> None:
     poll = data["config"]["latency_poll"]
     _style(
         ax2,
-        f"Enqueue-to-start latency, SKIP LOCKED ({rate:.0f} jobs/s offered, "
-        f"{poll * 1000:.0f} ms poll)",
+        f"Enqueue-to-start latency, SKIP LOCKED\n"
+        f"{rate:.0f} jobs/s offered, {poll * 1000:.0f} ms idle poll",
         "milliseconds",
     )
     ax2.set_ylim(bottom=0)

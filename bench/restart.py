@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import multiprocessing as mp
 import shlex
 import subprocess
@@ -85,7 +86,9 @@ def run_restart_test(
         ).fetchone()[0]
 
     started = time.monotonic()
-    subprocess.run(restart_cmd, check=True, capture_output=True)
+    # Not capture_output: on Windows the restarted postmaster inherits the pipe
+    # handles, so waiting for EOF on them would hang forever.
+    subprocess.run(restart_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     unavailable_seconds = time.monotonic() - started + _wait_for_db(url)
 
     with psycopg.connect(url, autocommit=True) as conn:
@@ -119,6 +122,8 @@ def main() -> None:
     parser.add_argument("--restart-cmd", help="shell command that restarts the database")
     parser.add_argument("--out", type=Path, default=Path("results/restart_test.json"))
     args = parser.parse_args()
+    # The pool logs every failed reconnect attempt during the restart; too noisy here.
+    logging.getLogger("psycopg.pool").setLevel(logging.ERROR)
 
     cmd = shlex.split(args.restart_cmd) if args.restart_cmd else embedded_restart_cmd()
     result = run_restart_test(
