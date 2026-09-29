@@ -1,0 +1,47 @@
+# PostgreSQL + HTTP API + two workers running the example handlers.
+#   docker compose up --build
+#   curl -X POST localhost:8000/jobs -H 'content-type: application/json' \
+#        -d '{"task": "echo", "payload": {"hello": "world"}}'
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: .
+    image: pgqueue:local
+    command: ["python", "-m", "pgqueue", "api", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build: .
+    image: pgqueue:local
+    command: ["python", "-m", "pgqueue", "worker", "--handlers", "examples.tasks:HANDLERS"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
+    # SIGTERM lets the current job finish; give it time before SIGKILL.
+    stop_grace_period: 30s
+    deploy:
+      replicas: 2
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+volumes:
+  pgdata:
