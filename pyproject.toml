@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pgqueue"
+version = "0.1.0"
+description = "A durable job queue on PostgreSQL with a FastAPI HTTP API and a Python worker library."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Yunlong Lu" }]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "psycopg[binary]>=3.2",
+    "psycopg-pool>=3.2",
+    "pydantic>=2.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.6", "matplotlib>=3.8"]
+# Embedded PostgreSQL binaries for local development without Docker.
+local = ["pixeltable-pgserver>=0.6"]
+
+[project.scripts]
+pgqueue = "pgqueue.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pgqueue"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Lets tests import the bench/ harnesses (crash test) without installing them.
+pythonpath = ["."]
