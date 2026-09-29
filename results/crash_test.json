@@ -1,0 +1,24 @@
+{
+  "jobs": 1000,
+  "workers": 6,
+  "kills": 30,
+  "kills_while_holding_a_job": 17,
+  "lease_seconds": 1.0,
+  "work_seconds": [
+    0.01,
+    0.05
+  ],
+  "seed": 0,
+  "elapsed_seconds": 12.93,
+  "final_states": {
+    "succeeded": 1000
+  },
+  "jobs_in_table": 1000,
+  "non_terminal_jobs": 0,
+  "never_delivered": 0,
+  "deliveries": 1017,
+  "distinct_jobs_delivered": 1000,
+  "duplicate_deliveries": 17,
+  "max_deliveries_of_one_job": 2,
+  "failed_attempts": 18
+}
