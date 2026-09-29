@@ -12,6 +12,9 @@ def test_killed_workers_lose_no_jobs(db_url: str) -> None:
     assert result["non_terminal_jobs"] == 0
     assert result["final_states"] == {"succeeded": 150}
     assert result["never_delivered"] == 0
+    # Guard against a vacuous pass: at least one kill must have hit a worker
+    # that held a job, so the reaper really had to recover an expired lease.
+    assert result["failed_attempts"] >= 1
     # At-least-once: duplicates are allowed, but each one must correspond to a
     # lease that expired (a killed worker's job being handed out again).
     assert result["duplicate_deliveries"] <= result["failed_attempts"]

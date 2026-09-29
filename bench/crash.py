@@ -32,12 +32,28 @@ from .localdb import database_url
 TASK = "crash-test"
 
 
-def worker_main(url: str, worker_id: str, lease: float, work: tuple[float, float]) -> None:
+def worker_main(
+    url: str,
+    worker_id: str,
+    lease: float,
+    work: tuple[float, float],
+    invocations: Any = None,
+) -> None:
+    """Run one worker process.
+
+    `invocations` is an optional shared multiprocessing.Value counting every
+    handler call, including calls that fail before recording a delivery row.
+    The crash test does not use it: a process killed while holding its lock
+    would deadlock the others.
+    """
     logging.basicConfig(level=logging.ERROR)
     recorder = psycopg.connect(url, autocommit=True)
 
     def handler(job: Job) -> dict[str, Any]:
         nonlocal recorder
+        if invocations is not None:
+            with invocations.get_lock():
+                invocations.value += 1
         if recorder.broken or recorder.closed:  # e.g. after a database restart
             recorder = psycopg.connect(url, autocommit=True)
         recorder.execute(
@@ -111,6 +127,8 @@ def run_crash_test(
         ).fetchone()[0]
 
     started = time.monotonic()
+    # Sampled just before each kill, so approximate: the victim may finish or
+    # claim a job between this query and the kill.
     kills_mid_job = 0
     # Let the workers import and connect before the first kill.
     while monitor.execute("SELECT count(*) FROM jobs WHERE attempts > 0").fetchone()[0] == 0:
@@ -144,14 +162,19 @@ def run_crash_test(
 
 
 def wait_for_terminal(conn: psycopg.Connection, timeout: float) -> None:
-    """Poll until no job is queued or running (or the timeout passes)."""
+    """Poll until no job is queued or running; raise TimeoutError otherwise."""
     deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
+    while True:
         open_jobs = conn.execute(
             "SELECT count(*) FROM jobs WHERE state IN ('queued', 'running')"
         ).fetchone()[0]
         if open_jobs == 0:
             return
+        if time.monotonic() > deadline:
+            states = dict(
+                conn.execute("SELECT state, count(*) FROM jobs GROUP BY state").fetchall()
+            )
+            raise TimeoutError(f"{open_jobs} job(s) still open after {timeout}s: {states}")
         time.sleep(0.1)
 
 

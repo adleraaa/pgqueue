@@ -25,14 +25,19 @@ import psycopg
 from pgqueue import Queue, migrate
 
 from .crash import TASK, reset, summarize, wait_for_terminal, worker_main
-from .localdb import ROOT, database_url
+from .localdb import PGDATA, database_url, pg_ctl
 
 
 def embedded_restart_cmd() -> list[str]:
-    import pixeltable_pgserver
+    return [str(pg_ctl()), "restart", "-D", str(PGDATA), "-m", "fast", "-w"]
 
-    bin_dir = Path(pixeltable_pgserver.__file__).parent / "pginstall18" / "bin"
-    return [str(bin_dir / "pg_ctl"), "restart", "-D", str(ROOT / ".pgdata"), "-m", "fast", "-w"]
+
+def describe_command(cmd: list[str]) -> str:
+    """The command for the results file, without machine-specific paths."""
+    shown = [Path(cmd[0]).name]
+    for prev, arg in zip(cmd, cmd[1:], strict=False):
+        shown.append("<pgdata>" if prev == "-D" else arg)
+    return " ".join(shown)
 
 
 def _wait_for_db(url: str, timeout: float = 60.0) -> float:
@@ -56,10 +61,11 @@ def run_restart_test(
     jobs: int = 500,
     workers: int = 4,
     lease: float = 5.0,
-    restart_after: float = 1.5,
+    restart_at: float = 0.3,
     work: tuple[float, float] = (0.01, 0.03),
     timeout: float = 120.0,
 ) -> dict[str, Any]:
+    """Restart the database once `restart_at` (a fraction) of the jobs have succeeded."""
     migrate(url)
     reset(url)
     with Queue(url) as q:
@@ -67,17 +73,27 @@ def run_restart_test(
             q.enqueue(TASK, {"n": i}, max_attempts=50)
 
     ctx = mp.get_context("spawn")
+    # Counts handler calls in shared memory, so calls that fail before they can
+    # record a delivery row (because the database is down) are counted too.
+    invocations = ctx.Value("q", 0)
     procs = [
-        ctx.Process(target=worker_main, args=(url, f"restart-{i}", lease, work), daemon=True)
+        ctx.Process(
+            target=worker_main, args=(url, f"restart-{i}", lease, work, invocations), daemon=True
+        )
         for i in range(workers)
     ]
     for p in procs:
         p.start()
 
+    # Trigger on progress rather than elapsed time, so most jobs are still
+    # queued at the restart however fast or slow the machine is.
+    threshold = max(1, int(jobs * restart_at))
     with psycopg.connect(url, autocommit=True) as conn:
-        while conn.execute("SELECT count(*) FROM jobs WHERE attempts > 0").fetchone()[0] == 0:
-            time.sleep(0.05)
-        time.sleep(restart_after)
+        while (
+            conn.execute("SELECT count(*) FROM jobs WHERE state = 'succeeded'").fetchone()[0]
+            < threshold
+        ):
+            time.sleep(0.01)
         done_before = conn.execute(
             "SELECT count(*) FROM jobs WHERE state = 'succeeded'"
         ).fetchone()[0]
@@ -103,14 +119,15 @@ def run_restart_test(
         "jobs": jobs,
         "workers": workers,
         "lease_seconds": lease,
-        "restart_command": " ".join(
-            Path(restart_cmd[0]).name if i == 0 else a for i, a in enumerate(restart_cmd)
-        ),
+        "restart_command": describe_command(restart_cmd),
         "succeeded_before_restart": done_before,
         "running_at_restart": running_before,
         "restart_and_reconnect_seconds": round(unavailable_seconds, 2),
         "seconds_from_restart_to_all_terminal": round(recovery_seconds, 2),
         **summary,
+        # Every handler call, including the ones that raised before recording a
+        # delivery row. handler_invocations - deliveries of those were cut short.
+        "handler_invocations": invocations.value,
     }
 
 
@@ -119,6 +136,9 @@ def main() -> None:
     parser.add_argument("--jobs", type=int, default=500)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--lease", type=float, default=5.0)
+    parser.add_argument(
+        "--restart-at", type=float, default=0.3, help="restart after this fraction succeeded"
+    )
     parser.add_argument("--restart-cmd", help="shell command that restarts the database")
     parser.add_argument("--out", type=Path, default=Path("results/restart_test.json"))
     args = parser.parse_args()
@@ -127,7 +147,12 @@ def main() -> None:
 
     cmd = shlex.split(args.restart_cmd) if args.restart_cmd else embedded_restart_cmd()
     result = run_restart_test(
-        database_url("pgqueue_bench"), cmd, jobs=args.jobs, workers=args.workers, lease=args.lease
+        database_url("pgqueue_bench"),
+        cmd,
+        jobs=args.jobs,
+        workers=args.workers,
+        lease=args.lease,
+        restart_at=args.restart_at,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

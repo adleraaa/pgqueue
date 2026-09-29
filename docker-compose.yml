@@ -23,6 +23,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
     ports:
       - "8000:8000"
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
@@ -35,6 +36,8 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
     # SIGTERM lets the current job finish; give it time before SIGKILL.
     stop_grace_period: 30s
+    # A worker that dies (bug, OOM) comes back; its job is recovered by the reaper.
+    restart: unless-stopped
     deploy:
       replicas: 2
     depends_on:
