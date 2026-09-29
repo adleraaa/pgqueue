@@ -7,7 +7,6 @@ handlers with side effects should be idempotent (Job.id is a natural dedupe key)
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import socket
@@ -21,7 +20,7 @@ from typing import Any
 import psycopg
 
 from .models import Job
-from .queue import ClaimMode, Queue
+from .queue import ClaimMode, Queue, to_jsonb
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +46,6 @@ class _Heartbeat:
         self._interval = interval
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name=f"heartbeat-{job.id}", daemon=True)
-        self.lost = False
 
     def _run(self) -> None:
         while not self._stop.wait(self._interval):
@@ -55,7 +53,6 @@ class _Heartbeat:
                 if not self._queue.heartbeat(self._job, self._lease):
                     # Reaped or cancelled. Keep the handler running (it cannot be
                     # interrupted safely); its ack will simply be rejected.
-                    self.lost = True
                     log.warning("job %s: lease lost while running", self._job.id)
                     return
             except psycopg.OperationalError as exc:
@@ -149,7 +146,9 @@ class Worker:
                 if handler is None:
                     raise LookupError(f"no handler registered for task {job.task!r}")
                 result = handler(job)
-                json.dumps(result)  # fail the attempt now if the result cannot be stored
+                # Fail the attempt now if PostgreSQL could not store the result
+                # (not JSON-serializable, NaN/Infinity, NUL characters).
+                to_jsonb(result)
             except Exception as exc:  # any handler error is a failed attempt
                 error = f"{type(exc).__name__}: {exc}"
         try:
@@ -173,6 +172,21 @@ class Worker:
             # reaper will re-queue the job: this is where duplicates come from.
             log.warning("job %s: could not record outcome (%s)", job.id, exc)
             return
+        except psycopg.Error as exc:
+            # The database rejected the values themselves (e.g. a DataError).
+            # Retrying the same statement would fail again, and letting it
+            # propagate would kill the worker, so record a failed attempt instead.
+            log.error("job %s: database rejected the outcome: %s", job.id, exc)
+            self._fail_quietly(job, f"could not record outcome: {type(exc).__name__}: {exc}")
+            return
         if not ok:
             self.stats.lost_leases += 1
             log.warning("job %s: lease was revoked; outcome discarded", job.id)
+
+    def _fail_quietly(self, job: Job, error: str) -> None:
+        try:
+            if self.queue.fail(job, error) is not None:
+                self.stats.failed += 1
+        except psycopg.Error as exc:
+            # Give up; the lease will expire and the reaper counts the attempt.
+            log.error("job %s: could not record the failure either: %s", job.id, exc)

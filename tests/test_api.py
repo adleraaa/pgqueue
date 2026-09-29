@@ -86,3 +86,22 @@ def test_metrics_endpoint(client: TestClient, queue: Queue) -> None:
 
 def test_healthz(client: TestClient) -> None:
     assert client.get("/healthz").json() == {"status": "ok"}
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ['{"task": "t", "payload": {"a": NaN}}', '{"task": "t", "payload": {"a": "x\\u0000y"}}'],
+    ids=["nan", "nul"],
+)
+def test_payload_jsonb_cannot_store_is_422_not_500(client: TestClient, raw: str) -> None:
+    r = client.post("/jobs", content=raw, headers={"content-type": "application/json"})
+    assert r.status_code == 422
+
+
+def test_healthz_returns_503_when_database_is_unreachable() -> None:
+    # Port 1 on localhost: connections are refused, so the pool never fills.
+    with (
+        Queue("host=127.0.0.1 port=1 dbname=x user=x connect_timeout=1") as dead,
+        TestClient(create_app(dead)) as c,
+    ):
+        assert c.get("/healthz").status_code == 503

@@ -218,7 +218,12 @@ def test_cancel_errors(queue: Queue) -> None:
 
 def test_wait_seconds_recorded_on_first_claim_only(queue: Queue, sql, expire_lease) -> None:
     job, _ = queue.enqueue("t")
-    sql.execute("UPDATE jobs SET run_at = now() - interval '2 seconds' WHERE id = %s", (job.id,))
+    # Pretend the job was enqueued 2 s ago and has been runnable since then.
+    sql.execute(
+        "UPDATE jobs SET run_at = now() - interval '2 seconds',"
+        " enqueued_at = now() - interval '2 seconds' WHERE id = %s",
+        (job.id,),
+    )
     [claimed] = queue.claim("w")
     assert 2.0 <= claimed.wait_seconds < 3.0
     expire_lease(job.id)
@@ -254,3 +259,53 @@ def test_retry_policy_bounds(attempt: int) -> None:
 def test_enqueue_rejects_bad_max_attempts(queue: Queue) -> None:
     with pytest.raises(ValueError):
         queue.enqueue("t", max_attempts=0)
+
+
+def test_wait_seconds_counts_from_enqueue_when_run_at_is_in_the_past(queue: Queue) -> None:
+    """A backfilled job scheduled an hour ago has not been waiting for an hour."""
+    queue.enqueue("t", run_at=datetime.now(UTC) - timedelta(hours=1))
+    [claimed] = queue.claim("w")
+    assert 0 <= claimed.wait_seconds < 5
+
+
+def test_enqueue_rejects_naive_run_at(queue: Queue) -> None:
+    with pytest.raises(ValueError, match="timezone"):
+        queue.enqueue("t", run_at=datetime(2030, 1, 1))
+
+
+def test_enqueue_rejects_run_at_and_delay_together(queue: Queue) -> None:
+    with pytest.raises(ValueError, match="not both"):
+        queue.enqueue("t", run_at=datetime.now(UTC), delay_seconds=5)
+
+
+@pytest.mark.parametrize("payload", [{"a": float("nan")}, {"a": "x\x00y"}])
+def test_enqueue_rejects_payload_jsonb_cannot_store(queue: Queue, payload: dict) -> None:
+    with pytest.raises(ValueError):
+        queue.enqueue("t", payload)
+
+
+def test_metrics_histogram_is_consistent_under_concurrent_claims(queue: Queue) -> None:
+    """Buckets are cumulative and never exceed _count, even while claims commit."""
+    for _ in range(300):
+        queue.enqueue("t")
+    stop = threading.Event()
+
+    def claim_all() -> None:
+        while not stop.is_set() and queue.claim("w"):
+            pass
+
+    with ThreadPoolExecutor(3) as pool:
+        futures = [pool.submit(claim_all) for _ in range(3)]
+        try:
+            for _ in range(50):
+                m = queue.metrics()
+                buckets = m.wait_buckets.get("default", [])
+                count = m.wait_count.get("default", 0)
+                assert buckets == sorted(buckets)
+                assert all(n <= count for n in buckets)
+                running = m.depth.get(("default", "running"), 0)
+                assert count == running  # every claimed job so far is still running
+        finally:
+            stop.set()
+            for f in futures:
+                f.result()

@@ -1,7 +1,8 @@
 """FastAPI HTTP API for producers and operators.
 
 Workers do not use HTTP: they talk to PostgreSQL directly through the worker
-library, which keeps claim/ack on a single round trip each.
+library, so claim and ack are each one SQL statement rather than an HTTP call
+plus a statement.
 """
 
 from __future__ import annotations
@@ -11,13 +12,18 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
 
+import psycopg
 from fastapi import FastAPI, HTTPException, Request, Response
-from pydantic import BaseModel, Field, model_validator
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from psycopg_pool import PoolTimeout
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from . import metrics
 from .db import database_url
 from .models import Job
-from .queue import InvalidTransition, JobNotFound, Queue
+from .queue import InvalidTransition, JobNotFound, Queue, to_jsonb
 
 
 class EnqueueRequest(BaseModel):
@@ -29,6 +35,14 @@ class EnqueueRequest(BaseModel):
     run_at: datetime | None = Field(default=None, description="Absolute start time (with tz).")
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=200)
     max_attempts: int = Field(default=5, ge=1, le=100)
+
+    @field_validator("payload")
+    @classmethod
+    def _storable_payload(cls, payload: dict[str, Any]) -> dict[str, Any]:
+        # The JSON parser accepts NaN and "\u0000", which jsonb rejects; answer
+        # 422 here instead of a 500 from the INSERT.
+        to_jsonb(payload)
+        return payload
 
     @model_validator(mode="after")
     def _one_schedule(self) -> EnqueueRequest:
@@ -45,7 +59,9 @@ def create_app(queue: Queue | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         owned = queue is None
-        app.state.queue = queue or Queue(database_url(), max_size=10)
+        # A short pool timeout: if the database is down, requests fail after
+        # 5 s instead of the 30 s default that workers use to ride out restarts.
+        app.state.queue = queue or Queue(database_url(), max_size=10, timeout=5.0)
         try:
             yield
         finally:
@@ -56,6 +72,13 @@ def create_app(queue: Queue | None = None) -> FastAPI:
 
     def q(request: Request) -> Queue:
         return request.app.state.queue
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+        # FastAPI's default handler echoes the offending input back, which fails
+        # to serialize when that input is NaN (and turns the 422 into a 500).
+        errors = [{k: v for k, v in e.items() if k != "input"} for e in exc.errors()]
+        return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
 
     # Handlers are plain `def`: psycopg calls block, so FastAPI runs them in its
     # thread pool instead of on the event loop.
@@ -98,8 +121,11 @@ def create_app(queue: Queue | None = None) -> FastAPI:
 
     @app.get("/healthz")
     def healthz(request: Request) -> dict[str, str]:
-        with q(request).pool.connection() as conn:
-            conn.execute("SELECT 1")
+        try:
+            with q(request).pool.connection(timeout=2.0) as conn:
+                conn.execute("SELECT 1")
+        except (PoolTimeout, psycopg.OperationalError):
+            raise HTTPException(503, "database unavailable") from None
         return {"status": "ok"}
 
     return app

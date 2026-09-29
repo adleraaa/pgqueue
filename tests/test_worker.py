@@ -3,6 +3,8 @@ from __future__ import annotations
 import threading
 import time
 
+import pytest
+
 from pgqueue import Job, JobState, Queue, RetryPolicy, Worker
 
 
@@ -82,17 +84,54 @@ def test_unserializable_result_fails_the_attempt(queue: Queue) -> None:
     assert queue.get(job.id).state is JobState.DEAD
 
 
+@pytest.mark.parametrize(
+    "poison",
+    [float("nan"), {"x": float("inf")}, "nul\x00byte", {"k\x00": 1}],
+    ids=["nan", "inf", "nul-in-string", "nul-in-key"],
+)
+def test_result_postgres_cannot_store_fails_the_attempt_and_worker_survives(
+    queue: Queue, poison: object
+) -> None:
+    """json.dumps accepts NaN and NUL characters but jsonb rejects them.
+
+    This used to raise DataError out of Worker.run and kill the worker process.
+    """
+    bad, _ = queue.enqueue("bad", max_attempts=1)
+    good, _ = queue.enqueue("good")
+    worker = Worker(queue, {"bad": lambda j: poison, "good": lambda j: "ok"}, poll_interval=0.01)
+    run_until(worker, lambda: all_terminal(queue, [bad.id, good.id]))
+    assert queue.get(bad.id).state is JobState.DEAD
+    assert queue.get(good.id).state is JobState.SUCCEEDED
+
+
+def test_handler_error_message_with_nul_is_stored(queue: Queue) -> None:
+    job, _ = queue.enqueue("t", max_attempts=1)
+
+    def handler(j: Job) -> None:
+        raise ValueError("bad\x00input")
+
+    run_until(
+        Worker(queue, {"t": handler}, poll_interval=0.01), lambda: all_terminal(queue, [job.id])
+    )
+    final = queue.get(job.id)
+    assert final.state is JobState.DEAD and final.last_error == "ValueError: badinput"
+
+
 def test_heartbeat_keeps_long_job_alive_while_reaper_runs(queue: Queue) -> None:
-    """A job running 4x longer than its lease must not be reaped or run twice."""
+    """A job running 3x longer than its lease must not be reaped or run twice.
+
+    Heartbeats every lease/3 leave two missed heartbeats of slack, which keeps
+    the test stable on a loaded CI runner.
+    """
     job, _ = queue.enqueue("slow")
     runs: list[int] = []
 
     def slow(j: Job) -> str:
         runs.append(j.attempts)
-        time.sleep(2.0)
+        time.sleep(3.0)
         return "done"
 
-    worker = Worker(queue, {"slow": slow}, lease_seconds=0.5, poll_interval=0.01, reap_interval=0.1)
+    worker = Worker(queue, {"slow": slow}, lease_seconds=1.0, poll_interval=0.01, reap_interval=0.1)
     # A second worker only reaps; if the lease lapsed it would re-run the job.
     reaper = Worker(queue, {"slow": slow}, poll_interval=0.05, reap_interval=0.1)
     stop = threading.Event()

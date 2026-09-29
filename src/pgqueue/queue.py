@@ -43,6 +43,29 @@ WAIT_BUCKETS: tuple[float, ...] = (
 )
 
 
+def _contains_nul(value: Any) -> bool:
+    if isinstance(value, str):
+        return "\x00" in value
+    if isinstance(value, dict):
+        return any(_contains_nul(k) or _contains_nul(v) for k, v in value.items())
+    if isinstance(value, list | tuple):
+        return any(_contains_nul(v) for v in value)
+    return False
+
+
+def to_jsonb(value: Any) -> str:
+    """Serialize `value` for a jsonb column, or raise ValueError/TypeError.
+
+    json.dumps happily writes NaN/Infinity and NUL characters (as \\u0000), but
+    PostgreSQL's jsonb rejects both. Checking here turns what would be a
+    DataError at INSERT/UPDATE time into an ordinary validation error.
+    """
+    text = json.dumps(value, allow_nan=False)
+    if _contains_nul(value):
+        raise ValueError("PostgreSQL jsonb cannot store NUL (\\u0000) characters")
+    return text
+
+
 class JobNotFound(LookupError):
     pass
 
@@ -118,7 +141,11 @@ SET state = 'running',
     lease_token = gen_random_uuid(),
     lease_expires_at = now() + make_interval(secs => %(lease)s),
     started_at = now(),
-    wait_seconds = COALESCE(j.wait_seconds, extract(epoch FROM now() - j.run_at)),
+    -- Measured from when the job became runnable: run_at for delayed jobs,
+    -- enqueued_at for jobs scheduled in the past (so a backfilled job with an
+    -- old run_at does not show up as hours of queueing latency).
+    wait_seconds = COALESCE(j.wait_seconds,
+                            extract(epoch FROM now() - GREATEST(j.run_at, j.enqueued_at))),
     updated_at = now()
 FROM next
 WHERE j.id = next.id
@@ -192,12 +219,16 @@ class Queue:
         min_size: int = 1,
         max_size: int = 4,
         retry: RetryPolicy | None = None,
+        timeout: float = 30.0,
     ) -> None:
+        """`timeout` is how long a call waits for a pooled connection (for
+        example while the database restarts) before raising PoolTimeout."""
         self.retry = retry or RetryPolicy()
         self.pool = ConnectionPool(
             conninfo,
             min_size=min_size,
             max_size=max_size,
+            timeout=timeout,
             kwargs={"row_factory": dict_row},
             # Validate connections on checkout so that after a database restart
             # stale connections are replaced instead of failing the next query.
@@ -240,10 +271,16 @@ class Queue:
         """
         if max_attempts < 1:
             raise ValueError("max_attempts must be >= 1")
+        if run_at is not None and delay_seconds:
+            raise ValueError("pass either run_at or delay_seconds, not both")
+        if run_at is not None and run_at.tzinfo is None:
+            # psycopg would send it as `timestamp` and PostgreSQL would read it in
+            # the server's TimeZone, silently shifting the job by hours.
+            raise ValueError("run_at must be timezone-aware")
         params = {
             "queue": queue,
             "task": task,
-            "payload": json.dumps(payload or {}),
+            "payload": to_jsonb(payload or {}),
             "priority": priority,
             "key": idempotency_key,
             "max_attempts": max_attempts,
@@ -314,7 +351,7 @@ class Queue:
     def ack(self, job: Job, result: Any = None) -> bool:
         """Mark the job succeeded. False means the lease was lost and nothing changed."""
         rows = self._fetch_all(
-            _ACK_SQL, {"id": job.id, "token": job.lease_token, "result": json.dumps(result)}
+            _ACK_SQL, {"id": job.id, "token": job.lease_token, "result": to_jsonb(result)}
         )
         return bool(rows)
 
@@ -328,7 +365,8 @@ class Queue:
             {
                 "id": job.id,
                 "token": job.lease_token,
-                "error": error[:2000],
+                # text columns cannot hold NUL either; exception messages can.
+                "error": error.replace("\x00", "")[:2000],
                 "delay": self.retry.delay(job.attempts),
             },
         )
@@ -338,8 +376,12 @@ class Queue:
         """Return jobs whose lease has expired to the queue (or dead-letter them).
 
         Safe to run from many processes at once: each row is updated by exactly
-        one of them, and a concurrent heartbeat that extends the lease wins
-        because PostgreSQL re-checks the WHERE clause after waiting for the row lock.
+        one of them. A reap and a concurrent heartbeat for the same job are
+        serialized by the row lock, and whichever commits first decides: if the
+        heartbeat commits first, the reaper re-checks its WHERE clause, sees the
+        extended lease and skips the row; if the reaper commits first, the
+        heartbeat's token no longer matches and it reports the lease as lost.
+        Both orders are safe.
         """
         return [r["id"] for r in self._fetch_all(_REAP_SQL)]
 
@@ -349,6 +391,11 @@ class Queue:
         m = QueueMetrics()
         failures: dict[str, int] = defaultdict(int)
         with self.pool.connection() as conn:
+            # One snapshot for all three queries. Under the default READ
+            # COMMITTED each statement sees a new snapshot, so a claim committing
+            # between them could make a bucket count exceed the histogram's
+            # _count, which Prometheus treats as a broken histogram.
+            conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             for r in conn.execute(
                 "SELECT queue, state, count(*) AS n, sum(errors) AS errors"
                 " FROM jobs GROUP BY queue, state"
@@ -383,4 +430,5 @@ __all__ = [
     "Queue",
     "QueueMetrics",
     "RetryPolicy",
+    "to_jsonb",
 ]
