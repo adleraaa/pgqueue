@@ -23,8 +23,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -35,11 +35,14 @@ jobs:
           ruff format --check .
       - name: Test
         run: pytest -v
+      - name: Database restart test
+        # Restarts the postgres service container while workers are busy.
+        run: python -m bench.restart --jobs 300 --restart-cmd "docker restart ${{ job.services.postgres.id }}" --out restart_ci.json
 
   compose:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Start stack
         run: docker compose up -d --build
       - name: Smoke test
