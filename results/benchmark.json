@@ -22,7 +22,7 @@
       32
     ],
     "jobs": 5000,
-    "repeats": 3,
+    "repeats": 5,
     "poll": 0.01,
     "rate": 100.0,
     "duration": 10.0,
@@ -34,204 +34,228 @@
       "workers": 1,
       "mode": "skip_locked",
       "jobs": 5000,
-      "seconds": 28.755,
-      "jobs_per_second": 173.9,
-      "worker_claims": 5002,
-      "worker_empty_claims": 2,
-      "worker_succeeded": 5000,
-      "worker_failed": 0,
-      "worker_lost_leases": 0,
-      "all_runs_jobs_per_second": [
-        169.1,
-        173.9,
-        206.9
-      ]
-    },
-    {
-      "workers": 2,
-      "mode": "skip_locked",
-      "jobs": 5000,
-      "seconds": 13.816,
-      "jobs_per_second": 361.9,
-      "worker_claims": 5005,
-      "worker_empty_claims": 5,
-      "worker_succeeded": 5000,
-      "worker_failed": 0,
-      "worker_lost_leases": 0,
-      "all_runs_jobs_per_second": [
-        421.0,
-        358.6,
-        361.9
-      ]
-    },
-    {
-      "workers": 4,
-      "mode": "skip_locked",
-      "jobs": 5000,
-      "seconds": 6.858,
-      "jobs_per_second": 729.1,
-      "worker_claims": 5004,
-      "worker_empty_claims": 4,
-      "worker_succeeded": 5000,
-      "worker_failed": 0,
-      "worker_lost_leases": 0,
-      "all_runs_jobs_per_second": [
-        729.1,
-        770.8,
-        722.9
-      ]
-    },
-    {
-      "workers": 8,
-      "mode": "skip_locked",
-      "jobs": 5000,
-      "seconds": 3.967,
-      "jobs_per_second": 1260.4,
-      "worker_claims": 5017,
-      "worker_empty_claims": 17,
-      "worker_succeeded": 5000,
-      "worker_failed": 0,
-      "worker_lost_leases": 0,
-      "all_runs_jobs_per_second": [
-        1260.4,
-        1255.5,
-        1280.0
-      ]
-    },
-    {
-      "workers": 16,
-      "mode": "skip_locked",
-      "jobs": 5000,
-      "seconds": 2.702,
-      "jobs_per_second": 1850.2,
-      "worker_claims": 5061,
-      "worker_empty_claims": 61,
-      "worker_succeeded": 5000,
-      "worker_failed": 0,
-      "worker_lost_leases": 0,
-      "all_runs_jobs_per_second": [
-        2103.7,
-        1850.2,
-        1762.8
-      ]
-    },
-    {
-      "workers": 32,
-      "mode": "skip_locked",
-      "jobs": 5000,
-      "seconds": 2.324,
-      "jobs_per_second": 2151.7,
-      "worker_claims": 5121,
-      "worker_empty_claims": 121,
-      "worker_succeeded": 5000,
-      "worker_failed": 0,
-      "worker_lost_leases": 0,
-      "all_runs_jobs_per_second": [
-        2122.2,
-        2316.2,
-        2151.7
-      ]
-    },
-    {
-      "workers": 1,
-      "mode": "naive",
-      "jobs": 5000,
-      "seconds": 32.421,
-      "jobs_per_second": 154.2,
+      "seconds": 24.194,
+      "jobs_per_second": 206.7,
       "worker_claims": 5003,
       "worker_empty_claims": 3,
       "worker_succeeded": 5000,
       "worker_failed": 0,
       "worker_lost_leases": 0,
       "all_runs_jobs_per_second": [
-        154.2,
-        139.9,
-        196.6
+        209.8,
+        202.9,
+        206.7,
+        208.9,
+        204.7
+      ]
+    },
+    {
+      "workers": 2,
+      "mode": "skip_locked",
+      "jobs": 5000,
+      "seconds": 12.038,
+      "jobs_per_second": 415.3,
+      "worker_claims": 5004,
+      "worker_empty_claims": 4,
+      "worker_succeeded": 5000,
+      "worker_failed": 0,
+      "worker_lost_leases": 0,
+      "all_runs_jobs_per_second": [
+        410.6,
+        415.3,
+        408.1,
+        449.7,
+        513.4
+      ]
+    },
+    {
+      "workers": 4,
+      "mode": "skip_locked",
+      "jobs": 5000,
+      "seconds": 5.15,
+      "jobs_per_second": 970.9,
+      "worker_claims": 5009,
+      "worker_empty_claims": 9,
+      "worker_succeeded": 5000,
+      "worker_failed": 0,
+      "worker_lost_leases": 0,
+      "all_runs_jobs_per_second": [
+        1036.1,
+        1021.5,
+        970.9,
+        890.1,
+        799.5
+      ]
+    },
+    {
+      "workers": 8,
+      "mode": "skip_locked",
+      "jobs": 5000,
+      "seconds": 3.366,
+      "jobs_per_second": 1485.5,
+      "worker_claims": 5016,
+      "worker_empty_claims": 16,
+      "worker_succeeded": 5000,
+      "worker_failed": 0,
+      "worker_lost_leases": 0,
+      "all_runs_jobs_per_second": [
+        1436.2,
+        1511.4,
+        1424.7,
+        1492.0,
+        1485.5
+      ]
+    },
+    {
+      "workers": 16,
+      "mode": "skip_locked",
+      "jobs": 5000,
+      "seconds": 2.456,
+      "jobs_per_second": 2035.8,
+      "worker_claims": 5048,
+      "worker_empty_claims": 48,
+      "worker_succeeded": 5000,
+      "worker_failed": 0,
+      "worker_lost_leases": 0,
+      "all_runs_jobs_per_second": [
+        1936.0,
+        2053.4,
+        2035.8,
+        2091.5,
+        1944.2
+      ]
+    },
+    {
+      "workers": 32,
+      "mode": "skip_locked",
+      "jobs": 5000,
+      "seconds": 2.048,
+      "jobs_per_second": 2441.3,
+      "worker_claims": 5064,
+      "worker_empty_claims": 64,
+      "worker_succeeded": 5000,
+      "worker_failed": 0,
+      "worker_lost_leases": 0,
+      "all_runs_jobs_per_second": [
+        2883.9,
+        2382.6,
+        2696.0,
+        2441.3,
+        2397.3
+      ]
+    },
+    {
+      "workers": 1,
+      "mode": "naive",
+      "jobs": 5000,
+      "seconds": 24.46,
+      "jobs_per_second": 204.4,
+      "worker_claims": 5001,
+      "worker_empty_claims": 1,
+      "worker_succeeded": 5000,
+      "worker_failed": 0,
+      "worker_lost_leases": 0,
+      "all_runs_jobs_per_second": [
+        206.5,
+        202.3,
+        210.2,
+        204.2,
+        204.4
       ]
     },
     {
       "workers": 2,
       "mode": "naive",
       "jobs": 5000,
-      "seconds": 12.605,
-      "jobs_per_second": 396.7,
+      "seconds": 12.135,
+      "jobs_per_second": 412.0,
       "worker_claims": 5002,
       "worker_empty_claims": 2,
       "worker_succeeded": 5000,
       "worker_failed": 0,
       "worker_lost_leases": 0,
       "all_runs_jobs_per_second": [
-        396.7,
-        359.9,
-        457.9
+        409.5,
+        422.4,
+        423.0,
+        406.7,
+        412.0
       ]
     },
     {
       "workers": 4,
       "mode": "naive",
       "jobs": 5000,
-      "seconds": 5.88,
-      "jobs_per_second": 850.4,
-      "worker_claims": 5008,
-      "worker_empty_claims": 8,
+      "seconds": 6.427,
+      "jobs_per_second": 777.9,
+      "worker_claims": 5012,
+      "worker_empty_claims": 12,
       "worker_succeeded": 5000,
       "worker_failed": 0,
       "worker_lost_leases": 0,
       "all_runs_jobs_per_second": [
-        832.7,
-        850.4,
-        859.1
+        786.0,
+        780.8,
+        749.0,
+        726.4,
+        777.9
       ]
     },
     {
       "workers": 8,
       "mode": "naive",
       "jobs": 5000,
-      "seconds": 5.085,
-      "jobs_per_second": 983.3,
-      "worker_claims": 5016,
-      "worker_empty_claims": 16,
+      "seconds": 4.705,
+      "jobs_per_second": 1062.7,
+      "worker_claims": 5032,
+      "worker_empty_claims": 32,
       "worker_succeeded": 5000,
       "worker_failed": 0,
       "worker_lost_leases": 0,
       "all_runs_jobs_per_second": [
-        984.0,
-        977.6,
-        983.3
+        898.7,
+        1062.7,
+        1062.5,
+        1091.5,
+        1075.5
       ]
     },
     {
       "workers": 16,
       "mode": "naive",
       "jobs": 5000,
-      "seconds": 5.236,
-      "jobs_per_second": 954.9,
-      "worker_claims": 5016,
-      "worker_empty_claims": 16,
+      "seconds": 5.115,
+      "jobs_per_second": 977.5,
+      "worker_claims": 5048,
+      "worker_empty_claims": 48,
       "worker_succeeded": 5000,
       "worker_failed": 0,
       "worker_lost_leases": 0,
       "all_runs_jobs_per_second": [
-        954.9,
-        951.8,
-        975.4
+        1052.6,
+        1040.7,
+        977.5,
+        935.4,
+        865.1
       ]
     },
     {
       "workers": 32,
       "mode": "naive",
       "jobs": 5000,
-      "seconds": 5.428,
-      "jobs_per_second": 921.2,
-      "worker_claims": 5063,
-      "worker_empty_claims": 63,
+      "seconds": 5.937,
+      "jobs_per_second": 842.2,
+      "worker_claims": 5053,
+      "worker_empty_claims": 53,
       "worker_succeeded": 5000,
       "worker_failed": 0,
       "worker_lost_leases": 0,
       "all_runs_jobs_per_second": [
-        914.3,
-        956.5,
-        921.2
+        839.4,
+        842.2,
+        832.8,
+        872.7,
+        861.2
       ]
     }
   ],
@@ -240,121 +264,121 @@
       "workers": 1,
       "mode": "skip_locked",
       "jobs": 1000,
-      "offered_rate_per_second": 100.0,
-      "p50_ms": 30.96,
-      "p95_ms": 59.43,
-      "p99_ms": 64.17,
-      "max_ms": 68.53
+      "offered_rate_per_second": 100.1,
+      "p50_ms": 29.18,
+      "p95_ms": 54.56,
+      "p99_ms": 60.42,
+      "max_ms": 71.98
     },
     {
       "workers": 2,
       "mode": "skip_locked",
       "jobs": 1000,
       "offered_rate_per_second": 100.1,
-      "p50_ms": 24.5,
-      "p95_ms": 50.66,
-      "p99_ms": 56.96,
-      "max_ms": 64.33
+      "p50_ms": 23.81,
+      "p95_ms": 50.3,
+      "p99_ms": 57.91,
+      "max_ms": 61.76
     },
     {
       "workers": 4,
       "mode": "skip_locked",
       "jobs": 1000,
       "offered_rate_per_second": 100.1,
-      "p50_ms": 19.15,
-      "p95_ms": 49.94,
-      "p99_ms": 51.79,
-      "max_ms": 60.53
+      "p50_ms": 21.09,
+      "p95_ms": 50.04,
+      "p99_ms": 52.64,
+      "max_ms": 62.09
     },
     {
       "workers": 8,
       "mode": "skip_locked",
       "jobs": 1000,
       "offered_rate_per_second": 100.1,
-      "p50_ms": 11.85,
-      "p95_ms": 48.05,
-      "p99_ms": 50.42,
-      "max_ms": 51.64
+      "p50_ms": 13.12,
+      "p95_ms": 48.55,
+      "p99_ms": 51.23,
+      "max_ms": 59.0
     },
     {
       "workers": 16,
       "mode": "skip_locked",
       "jobs": 1000,
       "offered_rate_per_second": 100.1,
-      "p50_ms": 9.44,
-      "p95_ms": 39.7,
-      "p99_ms": 48.94,
-      "max_ms": 54.82
+      "p50_ms": 16.59,
+      "p95_ms": 50.14,
+      "p99_ms": 51.33,
+      "max_ms": 54.58
     },
     {
       "workers": 32,
       "mode": "skip_locked",
       "jobs": 1000,
       "offered_rate_per_second": 100.1,
-      "p50_ms": 5.61,
-      "p95_ms": 39.27,
-      "p99_ms": 49.45,
-      "max_ms": 52.02
+      "p50_ms": 10.4,
+      "p95_ms": 40.47,
+      "p99_ms": 44.11,
+      "max_ms": 51.05
     },
     {
       "workers": 1,
       "mode": "naive",
       "jobs": 1000,
       "offered_rate_per_second": 100.1,
-      "p50_ms": 32.27,
-      "p95_ms": 59.59,
-      "p99_ms": 64.8,
-      "max_ms": 67.59
+      "p50_ms": 29.45,
+      "p95_ms": 55.47,
+      "p99_ms": 60.33,
+      "max_ms": 71.94
     },
     {
       "workers": 2,
       "mode": "naive",
       "jobs": 1000,
       "offered_rate_per_second": 100.1,
-      "p50_ms": 26.58,
-      "p95_ms": 53.62,
-      "p99_ms": 61.58,
-      "max_ms": 64.17
+      "p50_ms": 25.98,
+      "p95_ms": 50.31,
+      "p99_ms": 54.55,
+      "max_ms": 60.52
     },
     {
       "workers": 4,
       "mode": "naive",
       "jobs": 1000,
       "offered_rate_per_second": 100.1,
-      "p50_ms": 19.03,
-      "p95_ms": 48.47,
-      "p99_ms": 57.12,
-      "max_ms": 62.99
+      "p50_ms": 20.08,
+      "p95_ms": 50.12,
+      "p99_ms": 52.14,
+      "max_ms": 60.93
     },
     {
       "workers": 8,
       "mode": "naive",
       "jobs": 1000,
       "offered_rate_per_second": 100.1,
-      "p50_ms": 10.51,
-      "p95_ms": 41.62,
-      "p99_ms": 50.9,
-      "max_ms": 62.24
+      "p50_ms": 13.94,
+      "p95_ms": 48.87,
+      "p99_ms": 50.97,
+      "max_ms": 60.15
     },
     {
       "workers": 16,
       "mode": "naive",
       "jobs": 1000,
       "offered_rate_per_second": 100.1,
-      "p50_ms": 9.5,
-      "p95_ms": 40.05,
-      "p99_ms": 50.32,
-      "max_ms": 52.79
+      "p50_ms": 12.3,
+      "p95_ms": 41.54,
+      "p99_ms": 50.42,
+      "max_ms": 53.43
     },
     {
       "workers": 32,
       "mode": "naive",
       "jobs": 1000,
       "offered_rate_per_second": 100.1,
-      "p50_ms": 5.66,
-      "p95_ms": 30.49,
-      "p99_ms": 41.73,
-      "max_ms": 52.45
+      "p50_ms": 9.17,
+      "p95_ms": 39.07,
+      "p99_ms": 42.24,
+      "max_ms": 50.81
     }
   ]
 }

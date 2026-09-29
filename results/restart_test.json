@@ -2,11 +2,11 @@
   "jobs": 500,
   "workers": 4,
   "lease_seconds": 5.0,
-  "restart_command": "pg_ctl restart -D D:\\portfolio\\pgqueue\\.pgdata -m fast -w",
-  "succeeded_before_restart": 264,
+  "restart_command": "pg_ctl restart -D <pgdata> -m fast -w",
+  "succeeded_before_restart": 151,
   "running_at_restart": 4,
-  "restart_and_reconnect_seconds": 0.49,
-  "seconds_from_restart_to_all_terminal": 2.43,
+  "restart_and_reconnect_seconds": 0.8,
+  "seconds_from_restart_to_all_terminal": 3.69,
   "final_states": {
     "succeeded": 500
   },
@@ -17,5 +17,6 @@
   "distinct_jobs_delivered": 500,
   "duplicate_deliveries": 0,
   "max_deliveries_of_one_job": 1,
-  "failed_attempts": 4
+  "failed_attempts": 4,
+  "handler_invocations": 504
 }
