@@ -207,9 +207,11 @@ As a library:
 ```python
 from pgqueue import Job, Queue, Worker, migrate
 
+
 def send_email(job: Job) -> dict:
     ...  # must be idempotent: it can run more than once
     return {"sent": True}
+
 
 migrate(url)
 with Queue(url) as q:
