@@ -11,13 +11,6 @@ and "at-least-once" mean in practice, so the repo includes a test that kills
 workers mid-job, a test that restarts the database under load, and a benchmark
 that shows why `SKIP LOCKED` matters.
 
-## How this was built
-
-This project was built with [Claude Code](https://claude.com/claude-code), an AI coding agent.
-All 16 commits made on September 28, 2026 (US Eastern) carry a `Co-Authored-By: Claude` trailer,
-and later README edits were also made with Claude Code. The numbers in this README come from the
-scripts and result files in this repository.
-
 ## Results
 
 All numbers below come from scripts in `bench/`; the raw output is in
