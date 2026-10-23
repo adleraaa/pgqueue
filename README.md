@@ -6,10 +6,16 @@ priority, an optional delay and an optional idempotency key; workers claim jobs
 with `SELECT ... FOR UPDATE SKIP LOCKED` plus a time-limited lease that a
 heartbeat keeps alive, then ack or fail them. Failures retry with exponential
 backoff and jitter and are dead-lettered after `max_attempts`; a reaper returns
-jobs from crashed workers to the queue. I built it to understand what "durable"
+jobs from crashed workers to the queue. The goal is to show what "durable"
 and "at-least-once" mean in practice, so the repo includes a test that kills
 workers mid-job, a test that restarts the database under load, and a benchmark
 that shows why `SKIP LOCKED` matters.
+
+## How this was built
+
+This project was built with [Claude Code](https://claude.com/claude-code), an AI coding agent,
+on September 28, 2026 (16 of 16 commits carry a `Co-Authored-By: Claude` trailer). The numbers
+in this README come from the scripts and result files in this repository.
 
 ## Results
 
@@ -47,8 +53,8 @@ claimers, a claimer rarely finds the head row locked, and when it does the wait
 is one short transaction. At 4 workers SKIP LOCKED was ahead in this run
 (median 971 vs 778 jobs/s), but in an earlier run of the same benchmark (3
 repeats, `results/benchmark.json` at commit `2dc385f`) plain `FOR UPDATE` was
-ahead at 4 workers (850 vs 729 jobs/s), so I do not read anything into the
-4-worker difference. From 8 workers on the result was the same in both runs:
+ahead at 4 workers (850 vs 729 jobs/s), so the 4-worker difference is treated
+as noise. From 8 workers on the result was the same in both runs:
 plain `FOR UPDATE` peaks at about 1000 jobs/s and then declines (842 jobs/s at
 32 workers), while SKIP LOCKED keeps climbing to 2441 jobs/s at 32 workers, 2.9
 times as much. With a plain `FOR UPDATE`, every claimer tries to lock the same
